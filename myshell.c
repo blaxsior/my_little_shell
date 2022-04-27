@@ -119,7 +119,10 @@ int main()
         {
 
             int is_concurrent = 0; // concurrent 모드인지?
-            int cond = 0;          // continue, 큐에 기록 여부 등 점검.
+
+            int cond = 0; // continue, 큐에 기록 여부 등 점검.
+
+            pid_t conc;
 
             if (!strcmp(args[count - 1], "&")) // concurrent 모드인지 체크.
             {                                  // count = 1 인 경우, &와 NULL 밖에 없으므로 concurrent 모드라고 볼 수 없음.
@@ -130,13 +133,14 @@ int main()
                 }
                 else
                 {
-                    pid_t conc = fork();
+                    is_concurrent = 1; // concurrent 모드가 된다!
+
+                    conc = fork();
                     // 자식 프로세스를 fork 한다.
 
                     if (conc == 0) // 자식 프로세스이면,
                     {
-                        setpgid(0, 0);     // 해당 프로세스를 현재 프로세스와 분리하여 실행한다.
-                        is_concurrent = 1; // concurrent 모드가 된다!
+                        setpgid(0, 0); // 해당 프로세스를 현재 프로세스와 분리하여 실행한다.
                         args[count - 1] = NULL;
                         count -= 1;
                     }
@@ -150,34 +154,28 @@ int main()
             /* 조건 검사 구간 */
 
             /* cond 플래그
-            4 : 현재 history 명령 수행 중.
             2 : continue
             1 : 큐에 현재 명령 기록 안함.
             */
-            cond |= history(args[0]); // history 조건 검사
-
-            if (count > 1) // cd 조건 검사.
+            if (!is_concurrent || (is_concurrent && conc == 0) )
             {
-                cond |= mycd(args[0], args[1]);
-            }
+                cond |= history(args[0]); // history 조건 검사
 
-            is_running = bye(args[0]); // 종료 조건 검사
-            if (!is_running)
-            {
-                cond |= 3; // 명령 기록 안하고, continue -> 그냥 종료된다.
+                if (count > 1) // cd 조건 검사.
+                {
+                    cond |= mycd(args[0], args[1]);
+                }
+
+                is_running = bye(args[0]); // 종료 조건 검사
+                if (!is_running)
+                {
+                    cond |= 3; // 명령 기록 안하고, continue -> 그냥 종료된다.
+                }
             }
 
             /* 조건 검사 종료 */
 
             /* 조건에 따른 동작 */
-
-            if ((cond & 4) == 4) // history 조건.
-            {
-                if (is_concurrent) // concurrent 모드이면
-                {
-                    exit(EXIT_SUCCESS); // 그냥 종료
-                }
-            }
 
             if ((cond & 1) != 1) // 큐에 기록
             {
@@ -186,6 +184,10 @@ int main()
 
             if ((cond & 2) == 2) // continue
             {
+                if (is_concurrent && conc == 0) // concurrent 모드이면
+                {
+                    exit(EXIT_SUCCESS); // 그냥 종료
+                }
                 continue;
             }
             /* 동작 종료 */
@@ -206,8 +208,16 @@ int main()
             }
             if (is_pipe)
             {
-                // 만약 맨 마지막에 파이프를 썼으면, 삽입할 필요 없음.
                 PLinsert(&my_p, cur_pos);
+
+                Pnode *cur = my_p.front;
+                // while(cur)
+                // {
+                //     printf("%s\n", (args + cur->pos)[0]);
+                //     cur = cur->next;
+                // }
+
+                // 만약 맨 마지막에 파이프를 썼으면, 삽입할 필요 없음.
                 pid_t c = fork();
 
                 // if (c > 0)
@@ -241,6 +251,7 @@ int main()
                     exit(EXIT_SUCCESS);
                 }
             }
+
             if (is_concurrent)
             { // concurrent mode로 실행됬다면
                 exit(EXIT_SUCCESS);
