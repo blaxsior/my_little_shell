@@ -10,14 +10,15 @@ typedef struct _pnode
     struct _pnode *next;
 } Pnode;
 
-typedef struct _plist // 스택
+typedef struct _plist // 리스트
 {
-    struct _pnode *top;
+    struct _pnode *front;
+    struct _pnode *rear;
 } Plist;
 
 void PLinit(Plist *plist)
 {
-    plist->top = NULL;
+    plist->rear = NULL;
 }
 
 void PLinsert(Plist *plist, int pos)
@@ -27,28 +28,29 @@ void PLinsert(Plist *plist, int pos)
     p->next = NULL;
     p->pos = pos;
 
-    if (plist->top == NULL) // 값이 하나도 안 들어있는 경우.
+    if (plist->front == NULL) // 값이 하나도 안 들어있는 경우.
     {
-        plist->top = p; // top에 삽입.
+        plist->front = p;
     }
     else
     {
-        p->next = plist->top;
-        plist->top = p;
+        plist->rear->next = p;
     }
+    plist->rear = p; // top에 삽입
 }
 
 int PLremove(Plist *plist)
 {
-    if (plist->top == NULL) // top가 null이면
+    if (plist->front == NULL)
     {
+        plist->rear = NULL;
         return 0;
     }
 
-    Pnode *delnode = plist->top; // 삭제할 front 노드
+    Pnode *delnode = plist->front; // 삭제할 front 노드
 
-    plist->top = plist->top->next; // 포인터 이동
-    free(delnode);                 // 노드 삭제
+    plist->front = plist->front->next; // 포인터 이동
+    free(delnode);                     // 노드 삭제
 
     return 1; // 아직 값 남음.
 }
@@ -59,74 +61,50 @@ void PLremoveAll(Plist *plist)
         ;
 }
 
-void rec_pipe(Pnode *p, char **args, int outer)
+int rec_pipe(Plist *p, char **args)
 {
-    if (p == NULL)
-    {
-        exit(EXIT_SUCCESS); // 파이프에 넣을 인자가 없으면 종료.
-    }
     int fd[2];
-    if (pipe(fd) == -1)
-    {
-        perror("[error]");
-    }
-    pid_t c = fork();
+    int next = 0;
 
-    if (c > 0) // 부모
+    Pnode *cur = p->front;
+
+    while (cur->next) // 다음 것이 있다면
     {
-        close(fd[1]); // 쓰기용 파이프 닫기
-        if (outer != 0)
+        pipe(fd);
+
+        pid_t c = fork();
+
+        if (c > 0)
         {
-            dup2(fd[0], STDIN_FILENO);
-            close(fd[0]);
             wait(NULL);
         }
-        else
+        if (c == 0)
         {
-            //    free(p); // 더미노드이기 때문
-
-            int n;
-            char buffer[1024];
-            waitpid(c);
-
-            n = read(fd[0], buffer, sizeof(buffer)); // 읽은게 있으면
-            if (n)
+            char **pos = args + cur->pos; // 현재 명령어 위치
+            if (next != 0)
             {
-                printf("%s", buffer);
+                dup2(next, STDIN_FILENO);
+                close(next);
             }
-            else
+
+            if (fd[1] != 1)
             {
-                printf("no strings\n");
+                dup2(fd[1], STDOUT_FILENO);
+                close(fd[1]);
+                exit(EXIT_SUCCESS);
             }
-            close(fd[0]);
+
+            execvp(pos[0], pos);
         }
+        next = fd[0];
+        cur = cur->next;
     }
-    else if (c == 0) // 자식
 
-    {
-        char **pos = args + p->pos; // 명령 위치 찾기.
-        printf("pos : %s\n", pos[0]);
-
-        close(fd[0]);               // 읽기용 파이프 닫기
-        dup2(fd[1], STDOUT_FILENO); // 쓰기용 파이프 다른곳으로 연결
-        close(fd[1]);               // 쓰기용 파이프 닫기
-
-        rec_pipe(p->next, args, outer + 1); // 자식 수행. key = NULL이면 아무것도 안함.
-
-        if (!execvp(pos[0], pos))
-        {
-            exit(EXIT_SUCCESS);
-        }
-        else
-        {
-            exit(EXIT_FAILURE);
-        }
-    }
-    else
-    {
-        perror("[error]");
-        exit(EXIT_FAILURE);
-    }
+    if (next != 0)
+        dup2(next, 0);
+    char **pos = args + cur->pos; // 현재 명령어 위치
+    execvp(pos[0], pos);
+    exit(EXIT_SUCCESS);
 }
 
 Plist my_p;
@@ -139,6 +117,9 @@ void clear_plist()
 Pnode *give_dummy(Plist *p)
 {
     Pnode *dummy = (Pnode *)malloc(sizeof(Pnode));
-    dummy->next = p->top;
+    dummy->next = p->rear;
     return dummy;
 }
+
+// https://stackoverflow.com/questions/8082932/connecting-n-commands-with-pipes-in-a-shell
+// 파이프의 구성은 위의 구조를 참고했으나, 오류가 존재...

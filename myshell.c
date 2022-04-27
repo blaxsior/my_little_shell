@@ -65,7 +65,7 @@ int is_parent = 1;
 void clear_func()
 {
     clear_queue();
-//    clear_plist();
+    //    clear_plist();
 }
 
 int main()
@@ -96,6 +96,7 @@ int main()
         // 초기화 코드
         PLremoveAll(&my_p);
         count = 0;
+        is_pipe = 0;
 
         getcwd(cur_cwd, sizeof(cur_cwd)); // 현재 경로
         printf("%s: myc > ", cur_cwd);    // 쉘 표시
@@ -204,19 +205,21 @@ int main()
                 l_pipe_pos++;
             }
             if (is_pipe)
-            {
-                if (cur_pos != count - 1) // 맨 마지막에 "|"을 쓴게 아니면
-                {                         // 맨 마지막에는 "|" 이 없으므로 위의 조건을 만족 못함.
-                                          // 따라서 따로 처리해야한다...
-                                          // 만약 맨 마지막에 파이프를 썼으면, 삽입할 필요 없음.
-                    PLinsert(&my_p, cur_pos);
-                }
-                else
+            { // 만약 맨 마지막에 파이프를 썼으면, 삽입할 필요 없음.
+                PLinsert(&my_p, cur_pos);
+
+                pid_t c = fork();
+
+                // if (c > 0)
+                // {
+                //     waitpid(c, NULL, 0);
+                // }
+                if (c == 0)
                 {
-                    fprintf(stderr, "[error] : cannot write pipe last\n");
-                    continue;
+                    setpgid(0, 0);
+                    rec_pipe(&my_p, args);
+                    exit(EXIT_SUCCESS);
                 }
-                rec_pipe(my_p.top, args, 0);
             }
             else
             {
