@@ -19,6 +19,7 @@ typedef struct _plist // 리스트
 void PLinit(Plist *plist)
 {
     plist->rear = NULL;
+    plist->front = NULL;
 }
 
 void PLinsert(Plist *plist, int pos)
@@ -90,11 +91,12 @@ int rec_pipe(Plist *p, char **args)
             if (fd[1] != 1)
             {
                 dup2(fd[1], STDOUT_FILENO);
+
                 close(fd[1]);
-                exit(EXIT_SUCCESS);
             }
 
             execvp(pos[0], pos);
+            exit(EXIT_SUCCESS);
         }
         next = fd[0];
         cur = cur->next;

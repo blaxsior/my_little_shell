@@ -205,9 +205,9 @@ int main()
                 l_pipe_pos++;
             }
             if (is_pipe)
-            { // 만약 맨 마지막에 파이프를 썼으면, 삽입할 필요 없음.
+            {
+                // 만약 맨 마지막에 파이프를 썼으면, 삽입할 필요 없음.
                 PLinsert(&my_p, cur_pos);
-
                 pid_t c = fork();
 
                 // if (c > 0)
